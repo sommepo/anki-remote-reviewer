@@ -7,8 +7,7 @@ Review cards from your phone while desktop Anki does the scheduling.
 [Download Anki Remote Reviewer 0.2 (.ankiaddon)](https://github.com/sommepo/anki-remote-reviewer/releases/download/v0.2.0-beta.1/anki-remote-reviewer-0.2.0-beta.1.ankiaddon)
 
 An independent Anki add-on with a small browser interface. Start a deck, reveal
-answers, grade cards, undo a review, and play card audio. Your desktop collection
-remains the source of truth. Standard scheduling and an installed RWKV scheduler
+answers, grade cards, undo a review, and play card audio. Standard scheduling and an installed RWKV scheduler
 continue to run in Anki. AnkiConnect is not required.
 
 ## Install
