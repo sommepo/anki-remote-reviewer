@@ -1,0 +1,77 @@
+:root { font: 14px Arial, Helvetica, sans-serif; }
+* { box-sizing: border-box; }
+body { min-width: 320px; min-height: 100dvh; margin: 0; color: #dedede; background: #282828; }
+button, input, select { font: inherit; }
+button { min-height: 2.4rem; border: 1px solid #177ab5; border-radius: 3px; padding: .48rem 1rem; color: #fff; font-weight: 600; cursor: pointer; background: linear-gradient(#45a7df, #258aca); box-shadow: inset 0 1px rgba(255,255,255,.23); }
+button:hover { background: linear-gradient(#55b3e8, #2384bf); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:active { box-shadow: inset 0 1px 3px rgba(0,0,0,.28); }
+input, select { width: 100%; min-height: 2.45rem; border: 1px solid #555; border-radius: 2px; padding: .45rem .55rem; color: #e5e5e5; background: #333; }
+input:focus, select:focus { outline: 2px solid #79bce6; outline-offset: -1px; }
+label { display: block; margin: .85rem 0 .3rem; color: #bbb; font-size: .82rem; font-weight: bold; }
+.app-shell { width: min(52rem, 100%); min-height: 100dvh; margin: 0 auto; padding: 0 max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left)); }
+.anki-toolbar { display: flex; align-items: center; gap: .55rem; min-height: 3.15rem; margin: 0 -1rem 1.8rem; padding: 0 1rem; color: #eee; background: #333; border-bottom: 1px solid #202020; }
+.anki-wordmark { margin-right: .55rem; color: #fff; font-size: 1.08rem; }
+.anki-toolbar nav { display: flex; flex: 1; align-self: stretch; align-items: stretch; }
+.anki-toolbar nav span { display: grid; place-items: center; padding: 0 .68rem; color: #d9d9d9; font-weight: bold; font-size: .88rem; }
+.anki-toolbar nav .active { background: #4a4a4a; color: #fff; }
+.undo-button, .theme-button { min-height: 1.85rem; padding: .2rem .6rem; border-color: #777; color: #eee; font-size: .78rem; background: #4d4d4d; }
+.undo-button:hover, .theme-button:hover { background: #5a5a5a; }
+.review-heading { display: flex; justify-content: space-between; align-items: baseline; margin: 0 .2rem 1.15rem; border-bottom: 1px solid #484848; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: .65rem; font-size: 1.45rem; font-weight: normal; }
+h2 { font-size: 1.12rem; font-weight: normal; }
+#connection-state { color: #aaa; font-size: .8rem; }
+.panel { max-width: 39rem; margin: 0 auto; padding: 1.25rem 1.4rem; border: 1px solid #474747; border-radius: 3px; background: #333; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.panel p { color: #ccc; line-height: 1.45; }
+form button { width: 100%; margin-top: 1rem; }
+.hidden { display: none !important; }
+.metadata { display: flex; justify-content: space-between; gap: .5rem; min-height: 1rem; margin: 0 .3rem .55rem; color: #bbb; font-size: .83rem; }
+.rwkv { color: #af87f5; font-weight: bold; }
+.status { text-transform: capitalize; }
+.card-surface { min-height: 13rem; padding: clamp(1.1rem, 4vw, 2.25rem); overflow-wrap: anywhere; border: 1px solid #474747; border-radius: 3px; background: #282828; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .45rem; margin-top: 1.1rem; }
+.actions .reveal { min-width: 9rem; }
+.answer-button { display: grid; min-width: 7.15rem; min-height: 3.25rem; gap: .1rem; border-color: #4b4b4b; color: #eee; background: linear-gradient(#4d4d4d, #383838); box-shadow: inset 0 1px rgba(255,255,255,.08); }
+.answer-button:hover { background: linear-gradient(#585858, #424242); }
+.answer-button small { color: #bbb; font-weight: normal; }
+.ease-1 { border-bottom: 3px solid #de594e; }.ease-2 { border-bottom: 3px solid #dca938; }.ease-3 { border-bottom: 3px solid #5ea746; }.ease-4 { border-bottom: 3px solid #3b91c6; }
+.message { min-height: 1.2rem; margin: 1rem .2rem 0; color: #ff827a; text-align: center; }
+body[data-theme="light"] { color: #333; background: #f4f4f4; }
+body[data-theme="light"] .review-heading { border-color: #d2d2d2; }
+body[data-theme="light"] #connection-state { color: #777; }
+body[data-theme="light"] .panel { border-color: #c8c8c8; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+body[data-theme="light"] .panel p { color: #555; }
+body[data-theme="light"] label { color: #555; }
+body[data-theme="light"] input, body[data-theme="light"] select { border-color: #b8b8b8; color: #333; background: #fff; }
+body[data-theme="light"] .metadata { color: #666; }
+body[data-theme="light"] .card-surface { border-color: #c8c8c8; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+body[data-theme="light"] .answer-button { border-color: #aaa; color: #333; background: linear-gradient(#fff, #e5e5e5); box-shadow: inset 0 1px #fff; }
+body[data-theme="light"] .answer-button:hover { background: linear-gradient(#fff, #dcdcdc); }
+body[data-theme="light"] .answer-button small { color: #777; }
+.nav-button,.quiet-button { background:#3c3c3c; color:#eee; border:1px solid #555; box-shadow:none; }
+.nav-button { margin:4px 0; }
+.nav-button:hover,.quiet-button:hover { background:#484848; }
+.anki-toolbar { margin-bottom:1rem; }
+.theme-button,.undo-button { min-height:44px; }
+.card-surface { border:0; box-shadow:none; padding:1rem 0; }
+.actions { position:sticky; bottom:0; background:#282828; padding:.7rem 0 max(.7rem, env(safe-area-inset-bottom)); z-index:2; border-top:1px solid #444; }
+.answer-button { min-height:44px; min-width:90px; border-radius:16px; box-shadow:none; }
+.actions .reveal { min-height:44px; border-radius:16px; background:#414141; border-color:#555; }
+.answer-button small { display:block; }
+.app-footer { display:flex; justify-content:space-between; gap:1rem; margin-top:1.5rem; color:#a8a8a8; font-size:12px; }
+button:focus-visible { outline:2px solid #7ab9ef; outline-offset:3px; }
+body[data-theme="light"] .actions { background:#f4f4f4; border-color:#ccc; }
+body[data-theme="light"] .card-surface { box-shadow:none; }
+@media (max-width: 31rem) {
+  .app-shell { padding-left:12px; padding-right:12px; }
+  .anki-toolbar { margin:0 -12px 1rem; padding:0 12px; }
+  .anki-wordmark { font-size:14px; margin:0; }
+  .anki-toolbar nav span { padding:0 .35rem; font-size:12px; }
+  .answer-button { flex:1; min-width:0; padding:.5rem .25rem; font-size:13px; }
+  .actions { gap:5px; }
+  .review-heading { gap:10px; }
+  h1 { font-size:1.2rem; overflow-wrap:anywhere; }
+  #connection-state { white-space:nowrap; }
+  .app-footer span { display:none; }
+}
