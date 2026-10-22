@@ -281,6 +281,7 @@ def install(config=None, cards=None):
     for name in ("word heya.wav", "sentence.wav"):
         (media_dir / name).write_bytes(silent_wav())
     (media_dir / "secret.txt").write_text("nope", encoding="utf-8")
+    (media_dir / "STEINS;GATE0 1.webp").write_bytes(b"RIFF" + bytes(4) + b"WEBP")
 
     hooks = types.SimpleNamespace(**{name: Hook() for name in (
         "reviewer_did_show_question", "reviewer_did_show_answer", "reviewer_will_end", "profile_will_close",

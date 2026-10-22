@@ -23,7 +23,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlsplit
 
 from aqt import gui_hooks, mw
 from aqt.qt import QApplication, QMessageBox
@@ -739,7 +739,7 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         self._headers_sent = False
-        url = urlparse(self.path)
+        url = urlsplit(self.path)
         path = url.path
         try:
             if not self._valid_host():
@@ -785,13 +785,13 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         self._headers_sent = False
-        path = urlparse(self.path).path
+        path = urlsplit(self.path).path
         try:
             body = self._read_json_body()
             if not self._valid_host():
                 raise ReviewError("Use the configured address for this reviewer")
             origin = self.headers.get("Origin")
-            if origin and urlparse(origin).netloc != self.headers.get("Host"):
+            if origin and urlsplit(origin).netloc != self.headers.get("Host"):
                 raise ReviewError("Cross-origin requests are not allowed")
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 raise ReviewError("JSON content type is required")

@@ -15,6 +15,8 @@ Cards now behave like desktop Anki.
   ready instead of failing.
 - Fixed: the reviewer refused to start after restarting Anki while old
   connections to its port were still closing.
+- Fixed: pictures and audio whose file names contain `;` (for example
+  `STEINS;GATE` screenshots) did not load.
 - Type-in answers, `pycmd` replay buttons, `ans`/`ease` commands and TTS tags
   work. Keys the app does not use reach the card (Lapis ← → and C).
 - Audio follows the deck's autoplay and replay-question options;

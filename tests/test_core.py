@@ -260,6 +260,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.request(f"/c/{token}/_hover.js", auth=False, headers={"If-None-Match": headers["ETag"]})[0], 304)
         status, headers, body = self.request(f"/c/{token}/word%20heya.wav", auth=False, headers={"Range": "bytes=0-3"})
         self.assertEqual((status, body), (206, b"RIFF"))
+        # ';' is part of the file name, not URL path parameters (STEINS;GATE screenshots).
+        for name in ("STEINS;GATE0%201.webp", "STEINS%3BGATE0%201.webp"):
+            status, headers, body = self.request(f"/c/{token}/{name}", auth=False)
+            self.assertEqual((status, headers["Content-Type"], body[8:12]), (200, "image/webp", b"WEBP"), name)
         self.assertEqual(self.request(f"/c/{token}/..%2Fsecret.txt", auth=False)[0], 404)
         self.assertEqual(self.request("/c/123.abc/_hover.js", auth=False)[0], 403)
         self.assertEqual(self.request("/_anki/js/../../secret", auth=False)[0], 404)
