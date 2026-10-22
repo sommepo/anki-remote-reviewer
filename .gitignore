@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 meta.json
 dist/
-tests/preview.html
 tests/startup_probe.py
 tests/startup-probe-result.txt
 tools/install_local.py

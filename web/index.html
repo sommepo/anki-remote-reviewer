@@ -3,58 +3,78 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#292929" />
+    <meta name="theme-color" content="#232323" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Anki Review" />
+    <meta name="app-version" content="{{VERSION}}" />
     <title>Anki Remote Reviewer</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/app.css" />
+    <script src="/app.js" defer></script>
   </head>
   <body data-theme="dark">
-    <main class="app-shell">
-      <header class="anki-toolbar">
-        <strong class="anki-wordmark">Anki</strong>
-        <nav aria-label="Anki navigation">
-          <button id="decks-button" class="nav-button" type="button" disabled>Decks</button>
-          <span class="active">Review</span>
-        </nav>
-        <button id="theme-toggle" class="theme-button" type="button" title="Switch colour theme">Light</button>
-        <button id="undo" class="undo-button" type="button" title="Undo last answer" disabled>Undo</button>
-      </header>
+    <header class="toolbar">
+      <button id="decks-button" class="tool" type="button" title="Back to decks" hidden>Decks</button>
+      <div class="title">
+        <span id="title">Anki</span>
+        <span id="connection" role="status">Connecting…</span>
+      </div>
+      <button id="sync" class="tool" type="button" title="Sync with AnkiWeb">Sync</button>
+      <button id="undo" class="tool" type="button" title="Undo (Ctrl+Z)" disabled>Undo</button>
+      <button id="more" class="tool icon" type="button" title="More" aria-haspopup="menu" aria-expanded="false" aria-controls="menu">⋯</button>
+      <div id="menu" class="menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-action="replay" data-card>Replay audio<kbd>R</kbd></button>
+        <button type="button" role="menuitem" data-action="mark" data-card>Mark note<kbd>*</kbd></button>
+        <div class="flags" role="group" aria-label="Flag card">
+          <button type="button" role="menuitem" data-flag="1" data-card title="Red flag" aria-label="Red flag"></button>
+          <button type="button" role="menuitem" data-flag="2" data-card title="Orange flag" aria-label="Orange flag"></button>
+          <button type="button" role="menuitem" data-flag="3" data-card title="Green flag" aria-label="Green flag"></button>
+          <button type="button" role="menuitem" data-flag="4" data-card title="Blue flag" aria-label="Blue flag"></button>
+          <button type="button" role="menuitem" data-flag="5" data-card title="Pink flag" aria-label="Pink flag"></button>
+          <button type="button" role="menuitem" data-flag="6" data-card title="Turquoise flag" aria-label="Turquoise flag"></button>
+          <button type="button" role="menuitem" data-flag="7" data-card title="Purple flag" aria-label="Purple flag"></button>
+        </div>
+        <button type="button" role="menuitem" data-action="bury" data-card>Bury card<kbd>-</kbd></button>
+        <button type="button" role="menuitem" data-action="suspend" data-card>Suspend card<kbd>@</kbd></button>
+        <hr />
+        <button type="button" role="menuitem" data-action="theme" id="theme-item">Light mode</button>
+      </div>
+    </header>
 
-      <div class="review-heading"><h1 id="deck-name">Anki Remote Reviewer</h1><span id="connection-state" role="status">Connecting…</span></div>
+    <div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="notice-button" class="tool" type="button" hidden></button></div>
 
-      <section id="login-panel" class="panel login-panel hidden">
-        <h2>Connect to Anki</h2>
-        <p>In desktop Anki, choose Tools → Remote Reviewer: Show connection details. Paste the copied token below. This browser is remembered for 90 days.</p>
+    <main>
+      <section id="login" class="panel" hidden>
+        <h1>Connect to Anki</h1>
+        <p>In desktop Anki, choose <b>Tools → Remote Reviewer: Show connection details</b> and paste the copied token. This browser stays signed in for 90 days.</p>
         <form id="login-form">
           <label for="token">Access token</label>
           <input id="token" type="password" autocomplete="current-password" required />
-          <button type="submit">Connect</button>
+          <button type="submit" class="primary">Connect</button>
         </form>
       </section>
 
-      <section id="deck-panel" class="panel hidden">
-        <h2>Choose a deck</h2>
-        <p>Select a deck to start studying. Keep Anki open on your computer.</p>
-        <form id="deck-form">
-          <label for="deck-select">Deck</label>
-          <select id="deck-select" required></select>
-          <button type="submit">Study now</button>
-        </form>
+      <section id="decks" class="decks" hidden>
+        <ul id="deck-list" class="deck-list" aria-label="Decks"></ul>
+        <p id="deck-empty" class="empty" hidden>No decks in this profile.</p>
       </section>
 
-      <section id="review-panel" class="hidden">
-        <div class="metadata">
-          <span id="rwkv" class="rwkv">RWKV R: —</span>
-          <span id="status" class="status"></span>
-        </div>
-        <article id="card" class="card-surface"></article>
-        <button id="replay" class="quiet-button" type="button" title="Replay answer audio (R)" disabled>Replay audio</button>
-        <div id="answer-actions" class="actions"></div>
+      <section id="review" class="review" hidden>
+        <iframe id="card" title="Card"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"
+          allow="autoplay; fullscreen; clipboard-write"></iframe>
+        <div id="loading" class="loading" hidden><span class="spinner" aria-hidden="true"></span></div>
       </section>
-
-      <p id="message" class="message" role="alert"></p>
-      <button id="retry" class="quiet-button hidden" type="button">Reconnect</button>
-      <footer class="app-footer">Remote Reviewer · Beta <span>Space: reveal · 1–4: answer · R: replay</span></footer>
     </main>
-    <script src="/app.js"></script>
+
+    <footer id="bottom" class="bottom" hidden>
+      <div class="bottom-meta">
+        <span id="rwkv" class="rwkv"></span>
+        <span id="counts" class="counts"></span>
+        <span class="meta-spacer"></span>
+      </div>
+      <div id="actions" class="actions"></div>
+    </footer>
   </body>
 </html>

@@ -9,11 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (
     '__init__.py', 'backend.py', 'media.py', 'ports.py', 'manifest.json',
     'config.json', 'config.md', 'README.md', 'CHANGELOG.md', 'LICENSE',
-    'web/index.html', 'web/app.js', 'web/app.css',
+    'web/index.html', 'web/app.js', 'web/app.css', 'web/frame.html', 'web/frame.js',
 )
 SOURCE = RUNTIME + (
-    '.gitignore', 'tests/test_core.py', 'tests/audio.test.cjs',
-    'tests/preview.py', 'tools/package.py',
+    '.gitignore', 'tests/test_core.py', 'tests/audio.test.cjs', 'tests/fake_anki.py',
+    'tests/dev_server.py', 'tests/cdp.mjs', 'tests/e2e.mjs', 'tools/package.py',
 )
 
 def build():
@@ -22,6 +22,7 @@ def build():
     assert defaults['accessToken'] == '' and not defaults.get('cookieSecret')
     assert defaults['requireAccessToken'] is True
     assert defaults['rwkvNoteTypes'] == [] and defaults['audioFallbackFields'] == {}
+    assert defaults['lanAddress'] == '' and defaults['autoplayAudio'] is True
     output = ROOT / 'dist'
     output.mkdir(exist_ok=True)
     checksums = []
@@ -33,7 +34,7 @@ def build():
         with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for name in sorted(files):
                 data = (ROOT / name).read_bytes()
-                info = zipfile.ZipInfo(prefix + name, date_time=(2026, 9, 14, 0, 0, 0))
+                info = zipfile.ZipInfo(prefix + name, date_time=(2026, 10, 22, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o100644 << 16
                 archive.writestr(info, data)

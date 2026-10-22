@@ -15,7 +15,11 @@ def check_port(port):
         listeners = output(['netstat', '-ano'])
         for line in listeners.splitlines():
             cols = line.split()
-            if len(cols) > 2 and cols[0] in ('TCP', 'UDP') and cols[1].endswith(f':{port}'):
+            # Only listeners and bound UDP sockets block us; TIME_WAIT and client
+            # connections left from a previous run do not. Listeners have no
+            # remote address, which avoids parsing netstat's localized state.
+            listening = len(cols) > 3 and (cols[0] == 'UDP' or cols[2] in ('0.0.0.0:0', '[::]:0'))
+            if listening and cols[1].endswith(f':{port}'):
                 raise OSError(f'Port {port} is already in use (PID {cols[-1]}).')
         for family in ('ipv4', 'ipv6'):
             for protocol in ('tcp', 'udp'):

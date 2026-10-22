@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /* Stand-ins for when desktop Anki's own stylesheets are unavailable;
+         Anki's stylesheets below take precedence when they load. */
+      :root { --fg:#020202; --canvas:#f5f5f5; --flag-1:#ff9b9b; --flag-2:#ffb347; --flag-3:#93e066; --flag-4:#9dc3ff; --flag-5:#f5a8eb; --flag-6:#7edbd7; --flag-7:#cca3f1; }
+      :root.night-mode { --fg:#fcfcfc; --canvas:#2c2c2c; }
+      html { -webkit-text-size-adjust: 100%; }
+      body { margin: 20px; overflow-wrap: break-word; }
+      body.nightMode { background-color: var(--canvas); color: var(--fg); }
+      #_flag, #_mark { position: fixed; top: 0; font-size: 30px; }
+      #_flag { right: 10px; } #_mark { left: 10px; color: #ff0; }
+      img { max-width: 100%; }
+      .replay-button svg { width: 40px; height: 40px; }
+    </style>
+    <link rel="stylesheet" href="/_anki/css/webview.css" />
+    <link rel="stylesheet" href="/_anki/css/reviewer.css" />
+    <script src="/frame.js"></script>
+    <script src="/_anki/js/reviewer.js"></script>
+  </head>
+  <body class="card">
+    <div id="_mark" hidden>&#x2605;</div>
+    <div id="_flag" hidden>&#x2691;</div>
+    <div id="qa" dir="auto"></div>
+  </body>
+</html>

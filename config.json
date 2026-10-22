@@ -1,8 +1,10 @@
 {
   "port": 28594,
+  "lanAddress": "",
+  "lanSubnet": "",
   "accessToken": "",
   "requireAccessToken": true,
-  "autoPlayAudioOnAnswer": true,
+  "autoplayAudio": true,
   "rwkvNoteTypes": [],
   "audioFallbackFields": {},
   "requestTimeoutSeconds": 12
