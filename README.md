@@ -8,8 +8,8 @@ Review cards from your phone while desktop Anki does the scheduling.
 
 An independent Anki add-on with a small browser interface. Pick a deck, reveal
 answers, grade cards, undo, flag, mark, bury, suspend, sync and play card audio.
-Your desktop collection remains the source of truth. Standard scheduling and an
-installed RWKV scheduler keep running in Anki. AnkiConnect is not required.
+Standard scheduling and an installed RWKV scheduler keep running in Anki.
+AnkiConnect is not required.
 
 Cards look and behave as they do on the desktop: the phone shows the exact HTML
 desktop Anki renders and runs it with Anki's own reviewer script, so template
