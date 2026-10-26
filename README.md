@@ -2,9 +2,9 @@
 
 Review cards from your phone while desktop Anki does the scheduling.
 
-**0.3.0 · Windows host · Private-network use · Beta**
+**0.3.1 · Windows host · Private-network use · Beta**
 
-[Download Anki Remote Reviewer 0.3.0 (.ankiaddon)](https://github.com/sommepo/anki-remote-reviewer/releases/download/v0.3.0/anki-remote-reviewer-0.3.0.ankiaddon)
+[Download Anki Remote Reviewer 0.3.1 (.ankiaddon)](https://github.com/sommepo/anki-remote-reviewer/releases/download/v0.3.1/anki-remote-reviewer-0.3.1.ankiaddon)
 
 An independent Anki add-on with a small browser interface. Pick a deck, reveal
 answers, grade cards, undo, flag, mark, bury, suspend, sync and play card audio.
