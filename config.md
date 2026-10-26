@@ -17,6 +17,10 @@ Restart Anki after changes. Never share your installed `meta.json`.
 - `requestTimeoutSeconds`: `12`, constrained to 2–30 seconds. How long an
   action waits for desktop Anki to be ready (for example while the first card
   of a session loads) before reporting that Anki is busy.
+- `debugLog`: `false`. Writes a timing log to `user_files/debug.log` in the
+  add-on folder for diagnosing slow connections (Tools > Remote Reviewer: Show
+  debug log). Records timings, sizes and route names only: no file names, card
+  content or tokens. See the README.
 - `rwkvNoteTypes`: `[]`. Exact note-type names whose answers show live
   retrievability in the bottom bar. Requires the RWKV fork's scheduler.
 - `audioFallbackFields`: `{}`. For forks lacking AV tags. Lists note fields

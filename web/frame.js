@@ -99,7 +99,7 @@
   window.addEventListener("message", event => {
     if (event.source !== app || !event.data) return;
     const message = event.data;
-    if (message.type === "init") { local._load(message.storage); theme(message); }
+    if (message.type === "init") { local._load(message.storage); theme(message); if (message.debug) observeTimings(); }
     else if (message.type === "show") show(message);
     else if (message.type === "marks") marks(message);
     else if (message.type === "theme") theme(message);
@@ -116,6 +116,33 @@
       post({ type: "typed", id: message.id, value });
     }
   });
+
+  // Opt-in debug log: how long card pictures, audio and scripts took to load.
+  // Only route, extension, size and timing go to the app — never file names.
+  let timingObserver = null;
+  function observeTimings() {
+    if (timingObserver || typeof PerformanceObserver !== "function") return;
+    let batch = [], timer = 0;
+    const send = () => { timer = 0; if (batch.length) post({ type: "timing", entries: batch.splice(0) }); };
+    try {
+      timingObserver = new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+          let path;
+          try { path = decodeURIComponent(new URL(entry.name).pathname); } catch { continue; }
+          if (!path.startsWith("/c/") && !path.startsWith("/_anki/")) continue;
+          const ext = (path.match(/\.([A-Za-z0-9]{1,5})$/) || [, ""])[1].toLowerCase();
+          const item = { r: path.startsWith("/_anki/") ? "anki-asset" : path.includes("/_addons/") ? "addon-asset" : "media",
+                         ext, ms: Math.round(entry.duration) };
+          if (entry.responseStart > 0 && entry.requestStart > 0) item.ttfb = Math.round(entry.responseStart - entry.requestStart);
+          if (entry.transferSize > 0) item.kb = Math.round(entry.transferSize / 102.4) / 10;
+          else if (entry.decodedBodySize > 0) item.cached = 1;
+          batch.push(item);
+        }
+        if (!timer) timer = setTimeout(send, 2000);
+      });
+      timingObserver.observe({ type: "resource", buffered: true });
+    } catch {}
+  }
 
   // Keys the app does not use are replayed here, as on desktop where the card
   // always has keyboard focus (e.g. Lapis's arrow keys and "C" toggle).

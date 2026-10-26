@@ -13,10 +13,14 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import os
+import platform
 import re
 import secrets
+import sys
 import threading
 import time
+import traceback
 from concurrent.futures import Future, TimeoutError
 from functools import partial
 from http import HTTPStatus
@@ -34,7 +38,7 @@ from .ports import check_port
 ADDON_NAME = __package__
 ROOT = Path(__file__).parent
 STATIC_ROOT = ROOT / "web"
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 MAX_BODY_BYTES = 64 * 1024
 TRUSTED_DEVICE_SECONDS = 90 * 24 * 60 * 60
 FRAME_TOKEN_DAYS = 7
@@ -51,6 +55,8 @@ ADDON_ASSET_TYPES = {'.js', '.css', '.woff', '.woff2', '.ttf', '.otf', '.svg', '
                      '.webp', '.avif', '.mp3', '.ogg', '.opus', '.m4a', '.wav', '.mp4', '.webm'}
 ADDON_URL = re.compile(r"(?<=[\s\"'(=])/_addons/")
 ASSET_CSP = "sandbox; default-src 'none'"
+DEBUG_LOG = ROOT / "user_files" / "debug.log"
+DEBUG_LOG_BYTES = 1_000_000
 
 
 class ReviewError(Exception):
@@ -59,6 +65,68 @@ class ReviewError(Exception):
 
 class NotReady(Exception):
     """Desktop Anki is mid-transition; the action can be retried shortly."""
+
+
+class DebugLog:
+    """Opt-in timing log for diagnosing slow connections.
+
+    Records only route names, status codes, sizes, file extensions and timings.
+    Never request paths, file names, card content, cookies or tokens.
+    """
+
+    def __init__(self, path: Path, enabled: bool) -> None:
+        self.path = path
+        self.enabled = enabled
+        self._lock = threading.Lock()
+
+    def write(self, kind: str, **fields: Any) -> None:
+        if not self.enabled:
+            return
+        parts = [time.strftime("%Y-%m-%d %H:%M:%S"), kind]
+        parts += [f"{key}={value}" for key, value in fields.items() if value is not None and value != ""]
+        try:
+            with self._lock:
+                self.path.parent.mkdir(exist_ok=True)
+                if self.path.is_file() and self.path.stat().st_size > DEBUG_LOG_BYTES:
+                    os.replace(self.path, self.path.with_name(self.path.name + ".1"))
+                with self.path.open("a", encoding="utf-8") as handle:
+                    handle.write(" ".join(parts) + "\n")
+        except OSError:
+            pass
+
+
+def ms(seconds: float) -> int:
+    return round(seconds * 1000)
+
+
+def short_value(value: Any, limit: int = 40) -> str:
+    """A log-safe token: letters, digits and a few separators only."""
+    return re.sub(r"[^A-Za-z0-9_.:/+-]", "", str(value))[:limit]
+
+
+def exception_summary() -> str:
+    """Exception type and the last few code locations; no message (it may hold names)."""
+    kind, _, tb = sys.exc_info()
+    frames = traceback.extract_tb(tb)[-3:] if tb else []
+    where = ",".join(f"{Path(f.filename).name}:{f.lineno}:{f.name}" for f in frames)
+    return f"{kind.__name__ if kind else 'Unknown'}@{where}"
+
+
+def route_name(path: str) -> tuple[str, str]:
+    """(route, file extension) for the log, never the full path."""
+    if path in APP_FILES:
+        return "app:" + APP_FILES[path], ""
+    if path.startswith("/c/"):
+        name = path[3:].partition("/")[2]
+        if not name:
+            return "frame", ""
+        route = "addon-asset" if name.startswith("_addons/") else "media"
+        return route, short_value(Path(name).suffix.lower(), 6)
+    if path.startswith("/_anki/"):
+        return "anki-asset", short_value(Path(path).suffix.lower(), 6)
+    if path.startswith("/api/") and re.fullmatch(r"/api/[a-z-]{1,20}", path):
+        return path, ""
+    return "other", ""
 
 
 def validate_lan(address: str, subnet: str) -> tuple[str, str]:
@@ -97,6 +165,8 @@ def load_config(raw: dict[str, Any]) -> tuple[dict[str, Any], bool, list[str]]:
     for key in ("lanAddress", "lanSubnet"):
         if not isinstance(config.get(key), str):
             config[key] = ""
+    if not isinstance(config.get("debugLog"), bool):
+        config["debugLog"] = False
     changed = json.dumps(config, sort_keys=True) != before
     config["requestTimeoutSeconds"] = max(2, min(30, config["requestTimeoutSeconds"]))
     if not 1024 <= config["port"] <= 65535 or config["port"] in RESERVED_PORTS:
@@ -130,8 +200,11 @@ class RemoteReviewer:
         self._sync_started = 0.0
         self._last_sync: int | None = None
         self.assets = AssetCache()
+        self._timing = threading.local()
         raw = mw.addonManager.getConfig(ADDON_NAME) or {}
         self._config, changed, problems = load_config(raw)
+        self.debug = DebugLog(DEBUG_LOG, self._config["debugLog"])
+        self._log_startup()
         if changed:
             mw.addonManager.writeConfig(ADDON_NAME, {k: v for k, v in self._config.items() if k != "lanEnabled"})
         if problems:
@@ -150,6 +223,27 @@ class RemoteReviewer:
             if hasattr(gui_hooks, name):
                 getattr(gui_hooks, name).append(callback)
         self._capture_last()
+
+    # ----- debug timing -----
+
+    def _log_startup(self) -> None:
+        if not self.debug.enabled:
+            return
+        try:
+            from aqt import appVersion as anki_version
+        except ImportError:
+            anki_version = "unknown"
+        self.debug.write("start", version=VERSION, anki=short_value(anki_version), python=platform.python_version(),
+                         os=short_value(platform.platform(terse=True)), timeout=self._config["requestTimeoutSeconds"],
+                         lan=self._config["lanEnabled"])
+
+    def reset_timing(self) -> None:
+        self._timing.__dict__.update(queue=0.0, run=0.0, wait=0.0, calls=0)
+
+    def timing(self) -> dict[str, float]:
+        if not hasattr(self._timing, "calls"):
+            self.reset_timing()
+        return self._timing.__dict__
 
     # ----- change tracking (hooks run on the GUI thread) -----
 
@@ -203,9 +297,12 @@ class RemoteReviewer:
 
     def _sync_began(self, *args: Any) -> None:
         self._syncing, self._sync_started = True, time.time()
+        self.debug.write("sync", event="start")
         self._notify()
 
     def _sync_finished(self, *args: Any) -> None:
+        if self._syncing:
+            self.debug.write("sync", event="finish", seconds=round(time.time() - self._sync_started, 1))
         self._syncing, self._last_sync = False, int(time.time())
         self._notify()
 
@@ -224,7 +321,13 @@ class RemoteReviewer:
 
     def wait_for_change(self, since: int, timeout: float = LONG_POLL_SECONDS) -> bool:
         """Block an HTTP thread until state changes; True if it did."""
-        deadline = time.monotonic() + timeout
+        started = time.monotonic()
+        try:
+            return self._wait_for_change(since, started + timeout)
+        finally:
+            self.timing()["wait"] += time.monotonic() - started
+
+    def _wait_for_change(self, since: int, deadline: float) -> bool:
         with self._changes:
             while self._seq == since:
                 remaining = deadline - time.monotonic()
@@ -282,24 +385,50 @@ class RemoteReviewer:
             "loopback URL with Tailscale Serve; never expose it to the internet.",
         )
 
+    def show_debug_log(self) -> None:
+        if not self.debug.enabled:
+            QMessageBox.information(
+                mw, "Remote Reviewer",
+                "The debug log is off.\n\nTo turn it on: Tools > Add-ons > Anki Remote Reviewer > Config, "
+                'set "debugLog" to true, then restart Anki. Use the reviewer on your phone until it is slow, '
+                "then come back here.")
+            return
+        from aqt.utils import openFolder
+        self.debug.path.parent.mkdir(exist_ok=True)
+        openFolder(str(self.debug.path.parent))
+
     def invoke_on_main(self, callback: Callable[[], Any]) -> Any:
         """Run all collection and reviewer access on Anki's GUI thread."""
         future: Future = Future()
+        marks = {"queued": time.monotonic()}
 
         def run() -> None:
             if not future.set_running_or_notify_cancel():
                 return
+            marks["started"] = time.monotonic()
             try:
                 future.set_result(callback())
             except BaseException as error:
                 future.set_exception(error)
+            finally:
+                marks["finished"] = time.monotonic()
 
         mw.taskman.run_on_main(run)
+        timing = self.timing()
         try:
             return future.result(timeout=self._config["requestTimeoutSeconds"])
         except TimeoutError:
             future.cancel()
+            self.debug.write("anki-busy", waited_ms=ms(time.monotonic() - marks["queued"]),
+                             started="started" in marks)
             raise ReviewError("Anki is busy. Check the desktop window, then try again.")
+        finally:
+            # queue: waiting for Anki's main thread; run: time spent inside Anki.
+            now = time.monotonic()
+            started = marks.get("started", now)
+            timing["queue"] += started - marks["queued"]
+            timing["run"] += marks.get("finished", now) - started
+            timing["calls"] += 1
 
     # ----- authentication -----
 
@@ -363,6 +492,7 @@ class RemoteReviewer:
             "frameToken": self.frame_token(), "syncing": self._is_syncing(), "lastSync": self._last_sync,
             "canUndo": bool(undo_label), "undoLabel": undo_label,
             "timeoutSeconds": self._config["requestTimeoutSeconds"],
+            "debugLog": self.debug.enabled,
         }
         reviewer = mw.reviewer
         if mw.state != "review" or reviewer is None:
@@ -536,6 +666,27 @@ class RemoteReviewer:
             with self._changes:
                 self._changes.wait_for(lambda: not self._is_pending(), max(0.5, deadline - time.monotonic()))
         return self.session_state()
+
+    def record_client_timings(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Timings measured on the phone, so network time can be told apart from Anki time."""
+        if not self.debug.enabled:
+            return {"ok": True}
+        info = body.get("info")
+        if isinstance(info, dict):
+            self.debug.write("client-info", **{short_value(k, 20): short_value(str(v).replace(" ", "_"), 160)
+                                               for k, v in list(info.items())[:12]})
+        entries = body.get("entries")
+        for entry in entries[:200] if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            fields = {}
+            for key, value in list(entry.items())[:12]:
+                key = short_value(key, 12)
+                if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                    continue
+                fields[key] = round(value, 1) if isinstance(value, float) else short_value(value)
+            self.debug.write("client", **fields)
+        return {"ok": True}
 
     def start_deck(self, deck_id: Any, revision: Any) -> dict[str, Any]:
         if type(deck_id) is not int:
@@ -733,11 +884,44 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
 
     def log_message(self, _format: str, *_args: Any) -> None:
         # Deliberately avoid recording request paths, cookies, or tokens.
+        # The opt-in debug log (debugLog) records route names and timings only.
         return
+
+    # ----- timing -----
+
+    def do_GET(self) -> None:  # noqa: N802
+        self._timed("GET", self._handle_get)
+
+    def do_POST(self) -> None:  # noqa: N802
+        self._timed("POST", self._handle_post)
+
+    def _timed(self, method: str, handle: Callable[[], None]) -> None:
+        self._request_started = time.monotonic()
+        self._status, self._length, self._note, self._gzip = 0, 0, "", False
+        self.reviewer.reset_timing()
+        self._requests = getattr(self, "_requests", 0) + 1
+        try:
+            handle()
+        finally:
+            debug = self.reviewer.debug
+            path = urlsplit(self.path).path
+            if debug.enabled and path != "/api/debug":
+                route, ext = route_name(path)
+                timing = self.reviewer.timing()
+                if route == "/api/state" and "since=" in urlsplit(self.path).query:
+                    route = "/api/state:poll"
+                debug.write(
+                    "req", method=method, route=route, ext=ext, status=self._status, kb=round(self._length / 1024, 1),
+                    total_ms=ms(time.monotonic() - self._request_started),
+                    anki_queue_ms=ms(timing["queue"]) if timing["calls"] else None,
+                    anki_run_ms=ms(timing["run"]) if timing["calls"] else None,
+                    poll_wait_ms=ms(timing["wait"]) if timing["wait"] else None,
+                    gzip=self._gzip or None, range=bool(self.headers.get("Range")) or None,
+                    via="lan" if self._is_lan() else "loopback", conn_req=self._requests, note=self._note)
 
     # ----- routing -----
 
-    def do_GET(self) -> None:  # noqa: N802
+    def _handle_get(self) -> None:
         self._headers_sent = False
         url = urlsplit(self.path)
         path = url.path
@@ -779,11 +963,13 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
             status = HTTPStatus.NOT_FOUND if str(error) == "Not found" else HTTPStatus.FORBIDDEN
             self._error(status, str(error))
         except ConnectionError:
+            self._note = "client-disconnected"
             self.close_connection = True
         except Exception:
+            self._note = exception_summary()
             self._fail("Anki is unavailable. Check the desktop window and reconnect.")
 
-    def do_POST(self) -> None:  # noqa: N802
+    def _handle_post(self) -> None:
         self._headers_sent = False
         path = urlsplit(self.path).path
         try:
@@ -819,6 +1005,8 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
                 result = reviewer.stop_review(revision)
             elif path == "/api/sync":
                 result = reviewer.start_sync()
+            elif path == "/api/debug":
+                result = reviewer.record_client_timings(body)
             else:
                 self._error(HTTPStatus.NOT_FOUND, "Not found")
                 return
@@ -829,8 +1017,10 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             self._error(HTTPStatus.BAD_REQUEST, "Invalid request body")
         except ConnectionError:
+            self._note = "client-disconnected"
             self.close_connection = True
         except Exception:
+            self._note = exception_summary()
             self._fail("Anki could not complete this request. Check the desktop window and reconnect.")
 
     # ----- helpers -----
@@ -941,6 +1131,8 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
         self._send(status, data, {**headers, **(extra_headers or {})})
 
     def _error(self, status: HTTPStatus, message: str) -> None:
+        if not getattr(self, "_note", "x"):
+            self._note = short_value(message.replace(" ", "_"), 60)
         self._json({"error": message}, status=status)
 
     def _fail(self, message: str) -> None:
@@ -955,6 +1147,15 @@ class RemoteReviewHandler(BaseHTTPRequestHandler):
 
     def _start(self, status: HTTPStatus, length: int, headers: dict[str, str]) -> None:
         self._headers_sent = True
+        self._status, self._length = int(status), length
+        self._gzip = headers.get("Content-Encoding") == "gzip"
+        if self.reviewer.debug.enabled and hasattr(self, "_request_started"):
+            # Lets the phone subtract Anki's time from the round trip it measured.
+            timing = self.reviewer.timing()
+            headers = {**headers, "Server-Timing": f"total;dur={ms(time.monotonic() - self._request_started)}, "
+                       f"anki;dur={ms(timing['queue'] + timing['run'])}, wait;dur={ms(timing['wait'])}"}
+            if headers.get("Access-Control-Allow-Origin") == "*":
+                headers["Timing-Allow-Origin"] = "*"
         self.send_response(status)
         for name, value in headers.items():
             self.send_header(name, value)

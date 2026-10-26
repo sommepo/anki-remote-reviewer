@@ -5,3 +5,4 @@ dist/
 tests/startup_probe.py
 tests/startup-probe-result.txt
 tools/install_local.py
+user_files/

@@ -106,9 +106,34 @@ reconnects on its own.
   Forks without AV tags need explicit fields in playback order.
 - **Can't connect:** check Anki is open and `tailscale serve status`. Restart
   Anki after updating the add-on, then reload the page.
+- **Slow over Tailscale (or anywhere):** turn on the debug log (below), use the
+  reviewer until it is slow, then send the log file.
 - **Port conflict:** the add-on reports conflicts and leaves other services
   alone. Update `port` and the proxy together. Ports 8765 and 8766 are reserved
   for AnkiConnect and an OCR bridge.
+
+### Debug log
+
+Off by default. To turn it on: Tools > Add-ons > Anki Remote Reviewer > Config,
+set `"debugLog": true`, and restart Anki. Review on the phone until it feels
+slow, then choose Tools > Remote Reviewer: Show debug log to open the folder
+containing `debug.log`.
+
+Each line is one request with timings, so you can see where the time goes:
+
+- `req` lines come from Anki. `anki_queue_ms` is time waiting for Anki's main
+  window to be free; `anki_run_ms` is time spent inside Anki;
+  `poll_wait_ms` is normal idle waiting for the next change.
+- `client` lines come from the phone. `rtt` is the full round trip it saw,
+  `srv` the part spent in the add-on, and `net` the rest: the network,
+  including Tailscale. High `net` with low `srv` points at the connection
+  (for example a Tailscale relay; check `tailscale ping`), not at Anki.
+  `src=card`/`src=page` lines time card pictures, audio and scripts.
+
+The log contains only route names, file extensions, sizes, status codes and
+timings, plus the phone's browser and connection type. It never contains file
+names, card content, cookies or the access token. It keeps about 1 MB, plus one
+older file. Turn it off again when you are done.
 
 ## Development and release
 

@@ -23,6 +23,7 @@ def build():
     assert defaults['requireAccessToken'] is True
     assert defaults['rwkvNoteTypes'] == [] and defaults['audioFallbackFields'] == {}
     assert defaults['lanAddress'] == '' and defaults['autoplayAudio'] is True
+    assert defaults['debugLog'] is False
     output = ROOT / 'dist'
     output.mkdir(exist_ok=True)
     checksums = []
