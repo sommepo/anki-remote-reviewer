@@ -7,5 +7,6 @@
   "autoplayAudio": true,
   "rwkvNoteTypes": [],
   "audioFallbackFields": {},
-  "requestTimeoutSeconds": 12
+  "requestTimeoutSeconds": 12,
+  "debugLog": false
 }

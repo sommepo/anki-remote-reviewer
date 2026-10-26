@@ -1,3 +1,11 @@
+# 0.3.1
+
+- New: optional debug log (`"debugLog": true` in the add-on config) to find
+  out why reviewing is slow. It times every request on the computer and on the
+  phone, so network delay (for example a relayed Tailscale connection) can be
+  told apart from Anki being busy. Open it with Tools > Remote Reviewer: Show
+  debug log. Records timings only, never file names, card content or tokens.
+
 # 0.3.0
 
 Cards now behave like desktop Anki.

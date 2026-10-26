@@ -235,6 +235,38 @@ class ServerTests(unittest.TestCase):
         status, idle = self.api("/api/stop", {"revision": undone["revision"]})
         self.assertEqual(idle["status"], "idle")
 
+    def test_debug_log_records_timings_but_nothing_private(self):
+        if not self.cookie:
+            self.login()
+        self.assertFalse(self.api("/api/state")[1]["debugLog"], "off by default")
+        with tempfile.TemporaryDirectory() as directory:
+            original = self.reviewer.debug
+            self.reviewer.debug = backend.DebugLog(Path(directory, "user_files", "debug.log"), True)
+            try:
+                status, headers, body = self.request("/api/state")
+                self.assertTrue(json.loads(body)["debugLog"])
+                self.assertIn("anki;dur=", headers["Server-Timing"])
+                token = self.reviewer.frame_token()
+                self.assertEqual(self.request(f"/c/{token}/word%20heya.wav", auth=False)[0], 200)
+                self.request(f"/c/{token}/missing%20secret.png", auth=False)
+                status, _ = self.api("/api/debug", {"info": {"ua": "Test Phone 1.0", "net": "4g"}, "entries": [
+                    {"r": "/api/answer", "rtt": 2400, "hdr": 2390, "srv": 90, "net": 2300.4, "st": 200},
+                    {"r": "media", "ext": "mp3", "ms": 1800, "kb": 512, "evil": "a b\nreq forged=1"}, "junk"]})
+                self.assertEqual(status, 200)
+                log = self.reviewer.debug.path.read_text()
+            finally:
+                self.reviewer.debug = original
+        self.assertIn("route=/api/state", log)
+        self.assertRegex(log, r"anki_queue_ms=\d+ anki_run_ms=\d+")
+        self.assertIn("route=media ext=.wav status=200", log)
+        self.assertIn("route=media ext=.png status=404", log)
+        self.assertIn("client-info ua=Test_Phone_1.0 net=4g", log)
+        self.assertIn("client r=/api/answer rtt=2400 hdr=2390 srv=90 net=2300.4 st=200", log)
+        self.assertEqual(len([line for line in log.splitlines() if line.split(" ")[2] == "client"]), 2)
+        self.assertNotIn("forged", log.replace("evil=abreqforged1", ""))
+        for private in ("heya", "secret", "test-token", token, self.cookie.split("=", 1)[1]):
+            self.assertNotIn(private, log)
+
     def test_wait_for_change_times_out_and_wakes_on_expired_action(self):
         seq = self.reviewer._seq
         self.assertFalse(self.reviewer.wait_for_change(seq, timeout=0.2))

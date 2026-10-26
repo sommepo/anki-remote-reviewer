@@ -43,6 +43,72 @@
     get(key) { try { return localStorage.getItem(key); } catch { return null; } },
     set(key, value) { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch {} },
   };
+  // ----- opt-in timing report ("debugLog" in the add-on's config) -----
+  // Sends only route names, file extensions, sizes and timings to the add-on's
+  // debug log — never file names, card content or tokens.
+  const debug = {
+    entries: [], timer: 0, sentInfo: false, observing: false,
+    get on() { return !!state?.debugLog; },
+    add(entry) {
+      if (!this.on) return;
+      this.entries.push({ at: new Date().toTimeString().slice(0, 8), ...entry });
+      if (this.entries.length > 300) this.entries.splice(0, this.entries.length - 300);
+      if (this.entries.length >= 25 && connected) this.flush();
+      else this.schedule();
+    },
+    schedule(ms = 20000) { if (!this.timer) this.timer = setTimeout(() => { this.timer = 0; this.flush(); }, ms); },
+    async flush() {
+      clearTimeout(this.timer); this.timer = 0;
+      if (!this.entries.length) return;
+      if (!connected) { this.schedule(5000); return; }
+      const entries = this.entries.splice(0, 100);
+      const body = { entries };
+      if (!this.sentInfo) body.info = clientInfo();
+      try {
+        await api("/api/debug", body, { timeout: 15000, record: false });
+        this.sentInfo = true;
+        if (this.entries.length) this.schedule(1000);
+      } catch {
+        this.entries.unshift(...entries);
+        this.schedule(10000);
+      }
+    },
+    observe() {
+      if (this.observing || !this.on || typeof PerformanceObserver !== "function") return;
+      this.observing = true;
+      try {
+        new PerformanceObserver(list => list.getEntries().forEach(entry => {
+          const timing = resourceTiming(entry);
+          if (timing) this.add({ src: "page", ...timing });
+        })).observe({ type: "resource", buffered: true });
+      } catch {}
+    },
+  };
+
+  function clientInfo() {
+    const connection = navigator.connection || {};
+    return {
+      ua: navigator.userAgent, standalone: matchMedia("(display-mode: standalone)").matches,
+      net: connection.effectiveType || "", netRtt: connection.rtt ?? "", downlinkMbps: connection.downlink ?? "",
+      screen: `${screen.width}x${screen.height}`,
+    };
+  }
+
+  // Card media, Anki's scripts and add-on files; API calls are timed in api().
+  function resourceTiming(entry) {
+    let path;
+    try { path = decodeURIComponent(new URL(entry.name, location.href).pathname); } catch { return null; }
+    const route = path.startsWith("/c/") ? (path.includes("/_addons/") ? "addon-asset" : "media")
+      : path.startsWith("/_anki/") ? "anki-asset" : null;
+    if (!route || /^\/c\/[^/]+\/$/.test(path)) return null;
+    const ext = (path.match(/\.([A-Za-z0-9]{1,5})$/) || [, ""])[1].toLowerCase();
+    const result = { r: route, ext, ms: Math.round(entry.duration) };
+    if (entry.responseStart > 0 && entry.requestStart > 0) result.ttfb = Math.round(entry.responseStart - entry.requestStart);
+    if (entry.transferSize > 0) result.kb = Math.round(entry.transferSize / 102.4) / 10;
+    else if (entry.decodedBodySize > 0) result.cached = 1;
+    return result;
+  }
+
   let dark = (store.get("anki-remote-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")) === "dark";
 
   // ----- notices -----
@@ -143,7 +209,24 @@
 
   // ----- network -----
 
-  async function api(path, body, { timeout = 30000, signal } = {}) {
+  async function api(path, body, { timeout = 30000, signal, record = true } = {}) {
+    const started = performance.now();
+    const route = path.split("?")[0] + (path.includes("since=") ? ":poll" : "");
+    let headersAt = 0, status = 0, serverTiming = "";
+    const note = extra => {
+      if (!record || !debug.on) return;
+      const entry = { r: route, rtt: Math.round(performance.now() - started), ...extra };
+      if (headersAt) entry.hdr = Math.round(headersAt - started);
+      const part = name => { const match = serverTiming.match(new RegExp(name + ";dur=(\\d+)")); return match ? Number(match[1]) : null; };
+      const total = part("total");
+      if (total !== null) {
+        entry.srv = total;
+        entry.anki = part("anki");
+        if (part("wait")) entry.wait = part("wait");
+        entry.net = Math.max(0, entry.hdr - total);  // round trip minus time spent in the add-on
+      }
+      debug.add(entry);
+    };
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
@@ -158,11 +241,15 @@
           body: body ? JSON.stringify(body) : undefined, signal: controller.signal,
         });
       } catch (error) {
-        throw Object.assign(new Error(timedOut ? "Anki took too long to respond." : "Cannot reach Anki."),
-          { kind: timedOut ? "timeout" : signal?.aborted ? "aborted" : "network" });
+        const kind = timedOut ? "timeout" : signal?.aborted ? "aborted" : "network";
+        if (kind !== "aborted") note({ err: kind });
+        throw Object.assign(new Error(timedOut ? "Anki took too long to respond." : "Cannot reach Anki."), { kind });
       }
+      headersAt = performance.now(); status = response.status;
+      serverTiming = response.headers.get("Server-Timing") || "";
       let data = {};
       try { data = await response.json(); } catch {}
+      note({ st: status, kb: Math.round((Number(response.headers.get("Content-Length")) || 0) / 102.4) / 10 });
       if (!response.ok) {
         const message = data.error || `Anki could not complete the request (${response.status}).`;
         const auth = message === "Authentication required" || message === "Invalid access token";
@@ -288,7 +375,7 @@
     const message = event.data;
     if (message.type === "ready") {
       frame.ready = true;
-      ui.card.contentWindow.postMessage({ type: "init", storage: cardStorage(), dark }, "*");
+      ui.card.contentWindow.postMessage({ type: "init", storage: cardStorage(), dark, debug: debug.on }, "*");
       if (frame.pending) postFrame(frame.pending);
     } else if (message.type === "cmd") bridgeCommand(String(message.cmd));
     else if (message.type === "key") handleKey(message, true);
@@ -297,6 +384,12 @@
     } else if (message.type === "typed") {
       typedRequests.get(message.id)?.(typeof message.value === "string" ? message.value : null);
       typedRequests.delete(message.id);
+    } else if (message.type === "timing" && Array.isArray(message.entries)) {
+      message.entries.slice(0, 50).forEach(entry => {
+        if (entry && typeof entry === "object") debug.add({ src: "card", r: String(entry.r), ext: String(entry.ext || ""),
+          ms: Number(entry.ms) || 0, ...(entry.ttfb ? { ttfb: Number(entry.ttfb) } : {}),
+          ...(entry.kb ? { kb: Number(entry.kb) } : {}), ...(entry.cached ? { cached: 1 } : {}) });
+      });
     }
   });
 
@@ -326,6 +419,7 @@
     if (state && next.instance === state.instance && next.seq < state.seq) return;
     const previous = state;
     state = next; connected = true; needsLogin = false;
+    debug.observe();
     const reviewing = ["question", "answer", "loading"].includes(next.status);
     show(ui.login, false);
     show(ui.decks, next.status === "idle");
@@ -618,7 +712,7 @@
     if (forwardedKeys.delete(event.code)) forwardKey(event, "keyup");
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopAudio();
+    if (document.hidden) { stopAudio(); debug.flush(); }
     else kickPoll();
   });
   window.addEventListener("pagehide", stopAudio);
